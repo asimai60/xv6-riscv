@@ -55,6 +55,8 @@ procinit(void)
       initlock(&p->lock, "proc");
       p->state = UNUSED;
       p->kstack = KSTACK((int) (p - proc));
+      p->affinity_mask = 0;
+      p->effective_affinity_mask = 0;
   }
 }
 
@@ -145,6 +147,8 @@ found:
   memset(&p->context, 0, sizeof(p->context));
   p->context.ra = (uint64)forkret;
   p->context.sp = p->kstack + PGSIZE;
+  p->affinity_mask = 0;
+  p->effective_affinity_mask = 0;
 
   return p;
 }
@@ -169,6 +173,8 @@ freeproc(struct proc *p)
   p->killed = 0;
   p->xstate = 0;
   p->state = UNUSED;
+  p->affinity_mask = 0;
+  p->effective_affinity_mask = 0;
 }
 
 // Create a user page table for a given process, with no user memory,
@@ -316,6 +322,8 @@ fork(void)
 
   acquire(&wait_lock);
   np->parent = p;
+  np->affinity_mask = p->affinity_mask; //TODO: check if this is correct regarding locks
+  np->effective_affinity_mask = p->effective_affinity_mask;
   release(&wait_lock);
 
   acquire(&np->lock);
@@ -344,9 +352,14 @@ reparent(struct proc *p)
 // An exited process remains in the zombie state
 // until its parent calls wait().
 void
-exit(int status)
+exit(int status, const char *msg)
 {
   struct proc *p = myproc();
+  if (msg == 0) {
+    safestrcpy(p->exit_msg, "No exit message", sizeof(p->exit_msg));
+  } else {
+    safestrcpy(p->exit_msg, msg, sizeof(p->exit_msg));
+  }
 
   if(p == initproc)
     panic("init exiting");
@@ -388,7 +401,7 @@ exit(int status)
 // Wait for a child process to exit and return its pid.
 // Return -1 if this process has no children.
 int
-wait(uint64 addr)
+wait(uint64 addr, uint64 msg_addr)
 {
   struct proc *pp;
   int havekids, pid;
@@ -410,6 +423,12 @@ wait(uint64 addr)
           pid = pp->pid;
           if(addr != 0 && copyout(p->pagetable, addr, (char *)&pp->xstate,
                                   sizeof(pp->xstate)) < 0) {
+            release(&pp->lock);
+            release(&wait_lock);
+            return -1;
+          }
+          if(copyout(p->pagetable, msg_addr, pp->exit_msg,
+           sizeof(pp->exit_msg)) < 0){
             release(&pp->lock);
             release(&wait_lock);
             return -1;
@@ -446,6 +465,10 @@ scheduler(void)
 {
   struct proc *p;
   struct cpu *c = mycpu();
+  int cpu_id;
+
+  // Fetch the CPU ID
+  cpu_id = cpuid();
   
   c->proc = 0;
   for(;;){
@@ -454,23 +477,40 @@ scheduler(void)
 
     for(p = proc; p < &proc[NPROC]; p++) {
       acquire(&p->lock);
-      if(p->state == RUNNABLE) {
-        // Switch to chosen process.  It is the process's job
-        // to release its lock and then reacquire it
-        // before jumping back to us.
-        p->state = RUNNING;
-        c->proc = p;
-        swtch(&c->context, &p->context);
+      
+      // Check if the process can run on this CPU
+      if (((p->effective_affinity_mask >> cpu_id) & 1) || (p->affinity_mask == 0)) {
+        if (p->state == RUNNABLE) {
+          // Print the message only when actually switching to the process
+          if (p->pid != 2){ // Avoid printing the message for the shell process
+            printf("scheduler: process_id: %d, cpu_id: %d\n", p->pid, cpu_id);
+          }
 
-        // Process is done running for now.
-        // It should have changed its p->state before coming back.
-        c->proc = 0;
+          // Switch to chosen process. It is the process's job
+          // to release its lock and then reacquire it
+          // before jumping back to us.
+          p->state = RUNNING;
+          c->proc = p;
+
+          printf("scheduler: process %d affinities: %d\n", p->pid, p->affinity_mask);
+          swtch(&c->context, &p->context);
+          printf("scheduler: process %d affinities: %d\n", p->pid, p->affinity_mask);
+          int cpu_mask = 1 << cpu_id;
+          p->effective_affinity_mask = p->affinity_mask & !cpu_mask; 
+          if(p->effective_affinity_mask == 0){
+            p->effective_affinity_mask = p->affinity_mask;
+          }
+          // Process is done running for now.
+          // It should have changed its p->state before coming back.
+          c->proc = 0;
+          
+        }
       }
+
       release(&p->lock);
     }
   }
 }
-
 // Switch to scheduler.  Must hold only p->lock
 // and have changed proc->state. Saves and restores
 // intena because intena is a property of this

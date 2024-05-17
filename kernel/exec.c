@@ -128,6 +128,9 @@ exec(char *path, char **argv)
   p->trapframe->sp = sp; // initial stack pointer
   proc_freepagetable(oldpagetable, oldsz);
 
+  p->affinity_mask = 31; // default affinity mask //TODO: check if lock is needed
+  p->effective_affinity_mask = 31; // default effective affinity mask
+
   return argc; // this ends up in a0, the first argument to main(argc, argv)
 
  bad:
