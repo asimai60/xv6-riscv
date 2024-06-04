@@ -5,7 +5,7 @@
 int
 main(int argc, char *argv[])
 {
-    int affinity = 1;
+    int affinity = 5;
     if(argc > 1){
         affinity = atoi(argv[1]);
     }
@@ -15,12 +15,13 @@ main(int argc, char *argv[])
         write(1,msg,strlen(msg));
         exit(1,0);
     }
-    // int i = 0;
+    int i = 0;
     for(;;){
-        // i++;
-        // if(i % 1000 == 0){
-        //     printf("Process %d is running\n", getpid());
-        // }
+        i++;
+        if(i % 1000 == 0){
+            printf("Process %d is running\n", getpid());
+            sleep(1);
+        }
     }
 
     char *msg = "affinity_test is done running\n";

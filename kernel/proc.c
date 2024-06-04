@@ -485,18 +485,15 @@ scheduler(void)
           if (p->pid != 2){ // Avoid printing the message for the shell process
             printf("scheduler: process_id: %d, cpu_id: %d\n", p->pid, cpu_id);
           }
-
           // Switch to chosen process. It is the process's job
           // to release its lock and then reacquire it
           // before jumping back to us.
           p->state = RUNNING;
           c->proc = p;
 
-          printf("scheduler: process %d affinities: %d\n", p->pid, p->affinity_mask);
           swtch(&c->context, &p->context);
-          printf("scheduler: process %d affinities: %d\n", p->pid, p->affinity_mask);
-          int cpu_mask = 1 << cpu_id;
-          p->effective_affinity_mask = p->affinity_mask & !cpu_mask; 
+          uint32 cpu_mask = 1 << cpu_id;
+          p->effective_affinity_mask = p->affinity_mask & ~cpu_mask; 
           if(p->effective_affinity_mask == 0){
             p->effective_affinity_mask = p->affinity_mask;
           }
