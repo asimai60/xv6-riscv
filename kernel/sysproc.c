@@ -15,12 +15,18 @@ sys_exit(void)
 
   argint(0, &n);
   argaddr(1, &msg_addr);
+  int res = fetchstr(msg_addr, exit_msg, sizeof(exit_msg));
 
   if (msg_addr == 0) {
     exit(n, 0);  
-  } else if (argstr(1, exit_msg, sizeof(exit_msg)) < 0) {
+  } else if (res < 0){
+    // to solve the error of the string is too long we can add the null terminator manually
+    // exit_msg[32] = '\0';
+    // exit(n, exit_msg);
+
     exit(n, 0);  
   } else {
+    exit_msg[sizeof(exit_msg) - 1] = '\0';
     exit(n, exit_msg);
   }
 
@@ -114,7 +120,6 @@ sys_setaffinitymask(void)
 {
   int mask;
   argint(0, &mask);
-  //TODO: check lock need
   acquire(&myproc()->lock);
   myproc()->affinity_mask = mask;
   myproc()->effective_affinity_mask = mask;
