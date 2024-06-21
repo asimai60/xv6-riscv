@@ -10,6 +10,8 @@ struct cpu cpus[NCPU];
 
 struct proc proc[NPROC];
 
+struct channel channel[NCHAN];
+
 struct proc *initproc;
 
 int nextpid = 1;
@@ -58,6 +60,115 @@ procinit(void)
       p->affinity_mask = 0;
       p->effective_affinity_mask = 0;
   }
+}
+
+//initialize channel table
+void
+channelinit(void)
+{
+  struct channel *c;
+  int cid;
+  for(c = channel, cid = 0; c < &channel[NCHAN]; c++, cid++) {
+    initlock(&c->lock, "channel");
+    initlock(&c->wait_lock, "channel_wait");
+    c->state = DEAD;
+    c->cid = cid;
+    c->data = 0;
+    c->creatorpid = -1;
+    
+  }
+}
+
+struct channel*
+getdeadchannel(int pid)
+{
+  struct channel *c;
+  for(c = channel; c < &channel[NCHAN]; c++){
+    acquire(&c->lock);
+    if(c->state == DEAD){
+      c->state = EMPTY;
+      c->creatorpid = pid;
+      release(&c->lock);
+      
+      return c;
+    }
+    release(&c->lock);
+  }
+  return 0;
+}
+
+int
+channelput(int cid, int data)
+{
+  struct channel *c = &channel[cid];
+  int put = 1;
+  while(put){
+    acquire(&c->lock);
+    if(c->state == DEAD){
+      release(&c->lock);
+      return -1;
+    }
+    else if(c->state == FULL){
+      release(&c->lock);
+      acquire(&c->wait_lock);
+      sleep(c, &c->wait_lock);
+      release(&c->wait_lock);
+    }
+    else if(c->state == EMPTY){
+      put = 0;
+    }
+}
+  c->data = data;
+  c->state = FULL;
+  release(&c->lock);
+  wakeup(c);
+  return 0;
+}
+
+int
+channeltake(int cid, int *data_ptr)
+{
+  struct channel *c = &channel[cid];
+  int take = 1;
+  while(take){
+    acquire(&c->lock);
+    if(c->state == DEAD){
+      release(&c->lock);
+      return -1;
+    }
+    else if(c->state == EMPTY){
+      release(&c->lock);
+      acquire(&c->wait_lock);
+      sleep(c, &c->wait_lock);
+      release(&c->wait_lock);
+    }
+    else if(c->state == FULL){
+      take = 0;
+    }
+  }
+  if(copyout(myproc()->pagetable, (uint64)data_ptr, (char *)&c->data, sizeof(c->data)) < 0){
+    release(&c->lock);
+    return -1;
+  }
+  c->state = EMPTY;
+  release(&c->lock);
+  wakeup(c);
+  return 0;
+
+}
+
+int
+channeldestroy(int cid)
+{
+  if(cid < 0 || cid >= NCHAN){
+    return -1;
+  }
+  struct channel *c = &channel[cid];
+  acquire(&c->lock);
+  c->state = DEAD;
+  release(&c->lock);
+  wakeup(c);
+  return 0;
 }
 
 // Must be called with interrupts disabled,
@@ -373,6 +484,13 @@ exit(int status, const char *msg)
     }
   }
 
+  //Close open channels
+  for(int cid = 0; cid < NCHAN; cid++){
+    if(channel[cid].creatorpid == p->pid){
+      channeldestroy(cid);
+    }
+  }
+
   begin_op();
   iput(p->cwd);
   end_op();
@@ -481,10 +599,9 @@ scheduler(void)
       // Check if the process can run on this CPU
       if (((p->effective_affinity_mask >> cpu_id) & 1) || (p->affinity_mask == 0)) {
         if (p->state == RUNNABLE) {
-          // Print the message only when actually switching to the process
-          if (p->pid != 2){ // Avoid printing the message for the shell process
-            printf("scheduler: process_id: %d, cpu_id: %d\n", p->pid, cpu_id);
-          }
+          // Print the message only when actually switching to the process          
+          // printf("scheduler: process_id: %d, cpu_id: %d\n", p->pid, cpu_id);
+          
           // Switch to chosen process. It is the process's job
           // to release its lock and then reacquire it
           // before jumping back to us.
@@ -632,6 +749,14 @@ kill(int pid)
         // Wake process from sleep().
         p->state = RUNNABLE;
       }
+
+      // Close open channels
+      for(int cid = 0; cid < NCHAN; cid++){
+        if(channel[cid].creatorpid == p->pid){
+          channeldestroy(cid);
+        }
+      }
+
       release(&p->lock);
       return 0;
     }

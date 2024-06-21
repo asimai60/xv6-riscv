@@ -126,3 +126,42 @@ sys_setaffinitymask(void)
   release(&myproc()->lock);
   return 0;
 }
+
+uint64
+sys_channelcreate(void)
+{
+  struct channel *ch;
+  int pid = myproc()->pid;
+  ch = getdeadchannel(pid);
+  if (ch == 0) {
+    return -1;
+  }
+  return ch->cid;
+}
+
+uint64
+sys_channelput(void)
+{
+  int channel_id, data;
+  argint(0, &channel_id);
+  argint(1, &data);
+  return channelput(channel_id, data);
+}
+
+uint64
+sys_channeltake(void)
+{
+  int channel_id;
+  int *data_ptr;
+  argint(0, &channel_id);
+  argaddr(1, (uint64 *)&data_ptr);
+  return channeltake(channel_id, data_ptr);
+}
+
+uint64
+sys_channeldestroy(void)
+{
+  int channel_id;
+  argint(0, &channel_id);
+  return channeldestroy(channel_id);
+}

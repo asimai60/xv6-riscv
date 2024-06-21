@@ -109,3 +109,16 @@ struct proc {
   struct inode *cwd;           // Current directory
   char name[16];               // Process name (debugging)
 };
+
+enum channelstate { EMPTY, FULL, DEAD };
+
+struct channel{
+  struct spinlock lock;
+  struct spinlock wait_lock;
+  int cid;
+  enum channelstate state;
+  int data;
+  int creatorpid;
+
+  //int ref_count; // TODO: implement a reference count for the channel
+};

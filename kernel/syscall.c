@@ -103,6 +103,10 @@ extern uint64 sys_mkdir(void);
 extern uint64 sys_close(void);
 extern uint64 sys_memsize(void);
 extern uint64 sys_setaffinitymask(void);
+extern uint64 sys_channelcreate(void);
+extern uint64 sys_channelput(void);
+extern uint64 sys_channeltake(void);
+extern uint64 sys_channeldestroy(void);
 
 // An array mapping syscall numbers from syscall.h
 // to the function that handles the system call.
@@ -130,6 +134,10 @@ static uint64 (*syscalls[])(void) = {
 [SYS_close]   sys_close,
 [SYS_memsize] sys_memsize,
 [SYS_setaffinitymask] sys_setaffinitymask,
+[SYS_channelcreate] sys_channelcreate,
+[SYS_channelput] sys_channelput,
+[SYS_channeltake] sys_channeltake,
+[SYS_channeldestroy] sys_channeldestroy,
 };
 
 void

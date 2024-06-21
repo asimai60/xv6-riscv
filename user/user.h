@@ -24,6 +24,10 @@ int sleep(int);
 int uptime(void);
 int memsize(void);
 int setaffinitymask(int mask);
+int channelcreate(void);
+int channelput(int cid, int data);
+int channeltake(int cid, int *data_ptr);
+int channeldestroy(int cid);
 
 // ulib.c
 int stat(const char*, struct stat*);

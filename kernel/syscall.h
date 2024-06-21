@@ -22,3 +22,7 @@
 #define SYS_close  21
 #define SYS_memsize 22
 #define SYS_setaffinitymask 23
+#define SYS_channelcreate 24
+#define SYS_channelput 25
+#define SYS_channeltake 26
+#define SYS_channeldestroy 27

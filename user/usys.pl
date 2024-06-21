@@ -38,3 +38,7 @@ entry("sleep");
 entry("uptime");
 entry("memsize");
 entry("setaffinitymask");
+entry("channelcreate");
+entry("channelput");
+entry("channeltake");
+entry("channeldestroy");
