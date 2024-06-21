@@ -137,6 +137,7 @@ UPROGS=\
 	$U/_goodbye\
 	$U/_affinity_test\
 	$U/_channel_test\
+	$U/_primes\
 
 fs.img: mkfs/mkfs README $(UPROGS)
 	mkfs/mkfs fs.img README $(UPROGS)

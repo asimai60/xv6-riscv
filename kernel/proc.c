@@ -166,6 +166,8 @@ channeldestroy(int cid)
   struct channel *c = &channel[cid];
   acquire(&c->lock);
   c->state = DEAD;
+  c->creatorpid = -1;
+  c->data = 0;
   release(&c->lock);
   wakeup(c);
   return 0;
