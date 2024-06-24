@@ -98,7 +98,7 @@ struct cpu*     getmycpu(void);
 struct proc*    myproc();
 void            procinit(void);
 void            channelinit(void);
-struct channel* getdeadchannel(int pid);
+int             getdeadchannel(int pid);
 int             channelput(int cid, int data);
 int             channeltake(int cid, int *data_ptr);
 int             channeldestroy(int cid);

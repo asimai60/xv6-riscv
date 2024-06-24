@@ -114,7 +114,8 @@ enum channelstate { EMPTY, FULL, DEAD };
 
 struct channel{
   struct spinlock lock;
-  struct spinlock wait_lock;
+  void *waiting_put;
+  void *waiting_take;
   int cid;
   enum channelstate state;
   int data;

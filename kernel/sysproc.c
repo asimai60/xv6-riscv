@@ -130,13 +130,10 @@ sys_setaffinitymask(void)
 uint64
 sys_channelcreate(void)
 {
-  struct channel *ch;
+  int ch;
   int pid = myproc()->pid;
   ch = getdeadchannel(pid);
-  if (ch == 0) {
-    return -1;
-  }
-  return ch->cid;
+  return ch;
 }
 
 uint64
@@ -145,7 +142,7 @@ sys_channelput(void)
   int channel_id, data;
   argint(0, &channel_id);
   argint(1, &data);
-  return channelput(channel_id, data);
+  return channelput(channel_id, data);;
 }
 
 uint64
@@ -155,7 +152,7 @@ sys_channeltake(void)
   int *data_ptr;
   argint(0, &channel_id);
   argaddr(1, (uint64 *)&data_ptr);
-  return channeltake(channel_id, data_ptr);
+  return channeltake(channel_id, data_ptr);;
 }
 
 uint64

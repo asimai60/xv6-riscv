@@ -10,6 +10,7 @@
         "spinlock.h": "c",
         "sleeplock.h": "c",
         "user.h": "c",
-        "stat.h": "c"
+        "stat.h": "c",
+        "stdbool.h": "c"
     },
 }

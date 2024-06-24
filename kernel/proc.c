@@ -70,16 +70,16 @@ channelinit(void)
   int cid;
   for(c = channel, cid = 0; c < &channel[NCHAN]; c++, cid++) {
     initlock(&c->lock, "channel");
-    initlock(&c->wait_lock, "channel_wait");
     c->state = DEAD;
     c->cid = cid;
     c->data = 0;
     c->creatorpid = -1;
-    
+    c->waiting_put = 0;
+    c->waiting_take = 0;
   }
 }
 
-struct channel*
+int
 getdeadchannel(int pid)
 {
   struct channel *c;
@@ -88,88 +88,92 @@ getdeadchannel(int pid)
     if(c->state == DEAD){
       c->state = EMPTY;
       c->creatorpid = pid;
+      c->waiting_put = 0;
+      c->waiting_take = 0;
       release(&c->lock);
       
-      return c;
+      return c->cid;
     }
     release(&c->lock);
   }
-  return 0;
+  return -1;
 }
 
 int
 channelput(int cid, int data)
 {
+  if(cid < 0 || cid >= NCHAN){
+    return -1;  
+  }
   struct channel *c = &channel[cid];
-  int put = 1;
-  while(put){
-    acquire(&c->lock);
-    if(c->state == DEAD){
+  acquire(&c->lock);
+  while(c->state == FULL) {
+    sleep(c->waiting_put, &c->lock);
+    if(c->state == DEAD) {
       release(&c->lock);
       return -1;
     }
-    else if(c->state == FULL){
-      release(&c->lock);
-      acquire(&c->wait_lock);
-      sleep(c, &c->wait_lock);
-      release(&c->wait_lock);
-    }
-    else if(c->state == EMPTY){
-      put = 0;
-    }
-}
-  c->data = data;
-  c->state = FULL;
+  }
+  if(c->state == EMPTY) {
+    c->data = data;
+    c->state = FULL;
+    release(&c->lock);
+    wakeup(c->waiting_take);
+    return 0;
+  }
   release(&c->lock);
-  wakeup(c);
-  return 0;
+  return -1;
+
 }
 
 int
 channeltake(int cid, int *data_ptr)
 {
+  if(cid < 0 || cid >= NCHAN || data_ptr == 0){
+    return -1;
+  }
   struct channel *c = &channel[cid];
-  int take = 1;
-  while(take){
-    acquire(&c->lock);
-    if(c->state == DEAD){
+  acquire(&c->lock);
+  while(c->state == EMPTY) {
+    sleep(c->waiting_take, &c->lock);
+    if(c->state == DEAD) {
       release(&c->lock);
       return -1;
     }
-    else if(c->state == EMPTY){
+  }
+  if(c->state == FULL) {
+    if(copyout(myproc()->pagetable, (uint64)data_ptr, (char *)&c->data, sizeof(c->data)) < 0) {
       release(&c->lock);
-      acquire(&c->wait_lock);
-      sleep(c, &c->wait_lock);
-      release(&c->wait_lock);
+      return -1;
     }
-    else if(c->state == FULL){
-      take = 0;
-    }
-  }
-  if(copyout(myproc()->pagetable, (uint64)data_ptr, (char *)&c->data, sizeof(c->data)) < 0){
+    c->state = EMPTY;
     release(&c->lock);
-    return -1;
+    wakeup(c->waiting_put);
+    return 0;
   }
-  c->state = EMPTY;
   release(&c->lock);
-  wakeup(c);
-  return 0;
-
+  return -1;
 }
 
 int
 channeldestroy(int cid)
 {
   if(cid < 0 || cid >= NCHAN){
+    printf("channeldestroy: Invalid channel id %d\n", cid);
     return -1;
   }
   struct channel *c = &channel[cid];
   acquire(&c->lock);
+  if(c->state == DEAD){
+    release(&c->lock);
+    return 0;
+  }
   c->state = DEAD;
   c->creatorpid = -1;
   c->data = 0;
   release(&c->lock);
-  wakeup(c);
+  wakeup(c->waiting_put);
+  wakeup(c->waiting_take);
   return 0;
 }
 
